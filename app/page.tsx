@@ -11,7 +11,7 @@ import {
   Trash2
 } from "lucide-react";
 
-type Currency = "USD" | "EUR" | "GBP" | "AUD" | "CAD" | "AED";
+type Currency = "USD" | "EUR" | "GBP" | "AUD" | "CAD" | "AED" | "HUF" | "DKK";
 type ShippingType =
   | "DDP"
   | "CIF"
@@ -71,7 +71,7 @@ const currencySymbols: Record<Currency, string> = {
   GBP: "£",
   AUD: "A$",
   CAD: "C$",
-  AED: "د.إ"
+  AED: "د.إ", HUF: "Ft", DKK: "kr"
 };
 
 const shippingTypes: ShippingType[] = [
