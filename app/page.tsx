@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 type Currency = "USD" | "EUR" | "GBP" | "AUD" | "CAD" | "AED" | "HUF" | "DKK";
+type QuoteMode = "normal" | "group";
 type ShippingType =
   | "DDP"
   | "CIF"
@@ -51,6 +52,14 @@ type ProductLine = {
   quantity: number;
   unitPrice: number;
   taxRate: number;
+};
+
+type ProductGroup = {
+  id: string;
+  title: string;
+  products: ProductLine[];
+  freightCharge: number;
+  freightIncludedInPrice: boolean;
 };
 
 type InvoiceState = {
@@ -126,10 +135,41 @@ function money(value: number, currency: Currency) {
   })}`;
 }
 
+function getProductLineAmounts(product: ProductLine) {
+  const subtotal = product.quantity * product.unitPrice;
+  const tax = subtotal * (product.taxRate / 100);
+  const amount = subtotal + tax;
+
+  return { subtotal, tax, amount };
+}
+
+function getGroupTotals(
+  groupProducts: ProductLine[],
+  freightCharge: number,
+  freightIncludedInPrice: boolean,
+  shippingMethod: ShippingType
+) {
+  const freightShownAsIncluded = shippingMethod === "DDP" && freightIncludedInPrice;
+  const billableFreight = freightShownAsIncluded ? 0 : freightCharge;
+
+  return groupProducts.reduce(
+    (acc, product) => {
+      const { subtotal, tax, amount } = getProductLineAmounts(product);
+      acc.subtotal += subtotal;
+      acc.tax += tax;
+      acc.productAmount += amount;
+      acc.total += amount;
+      return acc;
+    },
+    { subtotal: 0, tax: 0, productAmount: 0, total: billableFreight }
+  );
+}
+
 export default function Home() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [savedTemplates, setSavedTemplates] = useState<CompanyInfo[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [quoteMode, setQuoteMode] = useState<QuoteMode>("normal");
   const [company, setCompany] = useState<CompanyInfo>(defaultCompany);
   const [customer, setCustomer] = useState<CustomerInfo>({
     name: "",
@@ -146,6 +186,24 @@ export default function Home() {
       quantity: 10,
       unitPrice: 68,
       taxRate: 0
+    }
+  ]);
+  const [productGroups, setProductGroups] = useState<ProductGroup[]>([
+    {
+      id: crypto.randomUUID(),
+      title: "Option A - Sea Freight",
+      products: [
+        {
+          ...blankProduct(),
+          description: "Pickup canopy package",
+          sku: "GLC-CANOPY-001",
+          quantity: 1,
+          unitPrice: 0,
+          taxRate: 0
+        }
+      ],
+      freightCharge: 0,
+      freightIncludedInPrice: false
     }
   ]);
   const [invoice, setInvoice] = useState<InvoiceState>({
@@ -176,20 +234,11 @@ export default function Home() {
   }, []);
 
   const totals = useMemo(() => {
-    const freightShownAsIncluded = invoice.shippingMethod === "DDP" && invoice.freightIncludedInPrice;
-    const billableFreight = freightShownAsIncluded ? 0 : invoice.freightCharge;
-
-    return products.reduce(
-      (acc, product) => {
-        const subtotal = product.quantity * product.unitPrice;
-        const tax = subtotal * (product.taxRate / 100);
-        acc.subtotal += subtotal;
-        acc.tax += tax;
-        acc.productAmount += subtotal + tax;
-        acc.total += subtotal + tax;
-        return acc;
-      },
-      { subtotal: 0, tax: 0, productAmount: 0, total: billableFreight }
+    return getGroupTotals(
+      products,
+      invoice.freightCharge,
+      invoice.freightIncludedInPrice,
+      invoice.shippingMethod
     );
   }, [products, invoice.freightCharge, invoice.freightIncludedInPrice, invoice.shippingMethod]);
 
@@ -214,6 +263,70 @@ export default function Home() {
   const updateProduct = (id: string, patch: Partial<ProductLine>) => {
     setProducts((prev) =>
       prev.map((product) => (product.id === id ? { ...product, ...patch } : product))
+    );
+  };
+
+  const addProductGroup = () => {
+    setProductGroups((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        title: `Option ${String.fromCharCode(65 + prev.length)}`,
+        products: [blankProduct()],
+        freightCharge: 0,
+        freightIncludedInPrice: false
+      }
+    ]);
+  };
+
+  const updateProductGroup = (groupId: string, patch: Partial<ProductGroup>) => {
+    setProductGroups((prev) =>
+      prev.map((group) => (group.id === groupId ? { ...group, ...patch } : group))
+    );
+  };
+
+  const addGroupProduct = (groupId: string) => {
+    setProductGroups((prev) =>
+      prev.map((group) =>
+        group.id === groupId
+          ? { ...group, products: [...group.products, blankProduct()] }
+          : group
+      )
+    );
+  };
+
+  const updateGroupProduct = (
+    groupId: string,
+    productId: string,
+    patch: Partial<ProductLine>
+  ) => {
+    setProductGroups((prev) =>
+      prev.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              products: group.products.map((product) =>
+                product.id === productId ? { ...product, ...patch } : product
+              )
+            }
+          : group
+      )
+    );
+  };
+
+  const removeGroupProduct = (groupId: string, productId: string) => {
+    setProductGroups((prev) =>
+      prev.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              products:
+                group.products.length === 1
+                  ? group.products
+                  : group.products.filter((product) => product.id !== productId)
+            }
+          : group
+      )
     );
   };
 
@@ -416,6 +529,16 @@ export default function Home() {
                 </select>
               </label>
             </div>
+            <label>
+              Quote Mode
+              <select
+                value={quoteMode}
+                onChange={(event) => setQuoteMode(event.target.value as QuoteMode)}
+              >
+                <option value="normal">Normal Quote</option>
+                <option value="group">Option / Group Quote</option>
+              </select>
+            </label>
             <div className="two-col">
               <label>
                 Issue date
@@ -453,33 +576,37 @@ export default function Home() {
                   ))}
                 </select>
               </label>
-              <label>
-                Shipping Freight
+              {quoteMode === "normal" && (
+                <label>
+                  Shipping Freight
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={invoice.freightCharge}
+                    onChange={(event) =>
+                      setInvoice((prev) => ({ ...prev, freightCharge: Number(event.target.value) }))
+                    }
+                  />
+                </label>
+              )}
+            </div>
+            {quoteMode === "normal" && (
+              <label className="checkbox-row">
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={invoice.freightCharge}
+                  type="checkbox"
+                  checked={invoice.freightIncludedInPrice}
+                  disabled={invoice.shippingMethod !== "DDP"}
                   onChange={(event) =>
-                    setInvoice((prev) => ({ ...prev, freightCharge: Number(event.target.value) }))
+                    setInvoice((prev) => ({
+                      ...prev,
+                      freightIncludedInPrice: event.target.checked
+                    }))
                   }
                 />
+                Included in price / show as /
               </label>
-            </div>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={invoice.freightIncludedInPrice}
-                disabled={invoice.shippingMethod !== "DDP"}
-                onChange={(event) =>
-                  setInvoice((prev) => ({
-                    ...prev,
-                    freightIncludedInPrice: event.target.checked
-                  }))
-                }
-              />
-              Included in price / show as /
-            </label>
+            )}
             <label>
               Payment terms
               <textarea
@@ -537,80 +664,241 @@ export default function Home() {
 
         <section className="form-section products-section">
           <div className="section-title product-title-row">
-            <h2>Product Lines</h2>
-            <button className="secondary-button" onClick={() => setProducts((prev) => [...prev, blankProduct()])}>
-              <Plus size={17} />
-              Add Product
-            </button>
+            <h2>{quoteMode === "group" ? "Quote Options / Groups" : "Product Lines"}</h2>
+            {quoteMode === "group" ? (
+              <button className="secondary-button" onClick={addProductGroup}>
+                <Plus size={17} />
+                Add Group / Add Option
+              </button>
+            ) : (
+              <button className="secondary-button" onClick={() => setProducts((prev) => [...prev, blankProduct()])}>
+                <Plus size={17} />
+                Add Product
+              </button>
+            )}
           </div>
-          <div className="product-editor-list">
-            {products.map((product, index) => (
-              <div className="product-editor" key={product.id}>
-                <div className="product-index">{index + 1}</div>
-                <label className="image-upload-tile">
-                  {product.image ? <img src={product.image} alt="" /> : <ImagePlus size={20} />}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) =>
-                      handleImageUpload(event, (value) => updateProduct(product.id, { image: value }))
-                    }
-                  />
-                </label>
-                <label className="wide-field">
-                  Description
-                  <input
-                    value={product.description}
-                    onChange={(event) => updateProduct(product.id, { description: event.target.value })}
-                  />
-                </label>
-                <label>
-                  SKU
-                  <input
-                    value={product.sku}
-                    onChange={(event) => updateProduct(product.id, { sku: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Qty
-                  <input
-                    type="number"
-                    min="0"
-                    value={product.quantity}
-                    onChange={(event) => updateProduct(product.id, { quantity: Number(event.target.value) })}
-                  />
-                </label>
-                <label>
-                  Unit price
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={product.unitPrice}
-                    onChange={(event) => updateProduct(product.id, { unitPrice: Number(event.target.value) })}
-                  />
-                </label>
-                <label>
-                  Tax %
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={product.taxRate}
-                    onChange={(event) => updateProduct(product.id, { taxRate: Number(event.target.value) })}
-                  />
-                </label>
-                <button
-                  className="icon-button"
-                  aria-label="Remove product"
-                  onClick={() => setProducts((prev) => prev.filter((item) => item.id !== product.id))}
-                  disabled={products.length === 1}
-                >
-                  <Trash2 size={17} />
-                </button>
-              </div>
-            ))}
-          </div>
+          {quoteMode === "group" ? (
+            <div className="quote-group-list">
+              {productGroups.map((group) => (
+                <div className="quote-group-editor" key={group.id}>
+                  <div className="group-editor-head">
+                    <label>
+                      Group title
+                      <input
+                        value={group.title}
+                        onChange={(event) =>
+                          updateProductGroup(group.id, { title: event.target.value })
+                        }
+                        placeholder="Option A - Sea Freight"
+                      />
+                    </label>
+                    <label>
+                      Group Freight
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={group.freightCharge}
+                        onChange={(event) =>
+                          updateProductGroup(group.id, {
+                            freightCharge: Number(event.target.value)
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="checkbox-row group-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={group.freightIncludedInPrice}
+                        disabled={invoice.shippingMethod !== "DDP"}
+                        onChange={(event) =>
+                          updateProductGroup(group.id, {
+                            freightIncludedInPrice: event.target.checked
+                          })
+                        }
+                      />
+                      Included in price / show as /
+                    </label>
+                  </div>
+                  <div className="product-editor-list">
+                    {group.products.map((product, index) => (
+                      <div className="product-editor" key={product.id}>
+                        <div className="product-index">{index + 1}</div>
+                        <label className="image-upload-tile">
+                          {product.image ? <img src={product.image} alt="" /> : <ImagePlus size={20} />}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) =>
+                              handleImageUpload(event, (value) =>
+                                updateGroupProduct(group.id, product.id, { image: value })
+                              )
+                            }
+                          />
+                        </label>
+                        <label className="wide-field">
+                          Description
+                          <input
+                            value={product.description}
+                            onChange={(event) =>
+                              updateGroupProduct(group.id, product.id, {
+                                description: event.target.value
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          SKU
+                          <input
+                            value={product.sku}
+                            onChange={(event) =>
+                              updateGroupProduct(group.id, product.id, { sku: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Qty
+                          <input
+                            type="number"
+                            min="0"
+                            value={product.quantity}
+                            onChange={(event) =>
+                              updateGroupProduct(group.id, product.id, {
+                                quantity: Number(event.target.value)
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Unit price
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={product.unitPrice}
+                            onChange={(event) =>
+                              updateGroupProduct(group.id, product.id, {
+                                unitPrice: Number(event.target.value)
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Tax %
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={product.taxRate}
+                            onChange={(event) =>
+                              updateGroupProduct(group.id, product.id, {
+                                taxRate: Number(event.target.value)
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="line-amount-field">
+                          Amount
+                          <input
+                            readOnly
+                            value={money(getProductLineAmounts(product).amount, invoice.currency)}
+                          />
+                        </label>
+                        <button
+                          className="icon-button"
+                          aria-label="Remove product"
+                          onClick={() => removeGroupProduct(group.id, product.id)}
+                          disabled={group.products.length === 1}
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="secondary-button group-add-product" onClick={() => addGroupProduct(group.id)}>
+                    <Plus size={17} />
+                    Add Product
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="product-editor-list">
+              {products.map((product, index) => (
+                <div className="product-editor" key={product.id}>
+                  <div className="product-index">{index + 1}</div>
+                  <label className="image-upload-tile">
+                    {product.image ? <img src={product.image} alt="" /> : <ImagePlus size={20} />}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) =>
+                        handleImageUpload(event, (value) => updateProduct(product.id, { image: value }))
+                      }
+                    />
+                  </label>
+                  <label className="wide-field">
+                    Description
+                    <input
+                      value={product.description}
+                      onChange={(event) => updateProduct(product.id, { description: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    SKU
+                    <input
+                      value={product.sku}
+                      onChange={(event) => updateProduct(product.id, { sku: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Qty
+                    <input
+                      type="number"
+                      min="0"
+                      value={product.quantity}
+                      onChange={(event) => updateProduct(product.id, { quantity: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Unit price
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={product.unitPrice}
+                      onChange={(event) => updateProduct(product.id, { unitPrice: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Tax %
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={product.taxRate}
+                      onChange={(event) => updateProduct(product.id, { taxRate: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label className="line-amount-field">
+                    Amount
+                    <input
+                      readOnly
+                      value={money(getProductLineAmounts(product).amount, invoice.currency)}
+                    />
+                  </label>
+                  <button
+                    className="icon-button"
+                    aria-label="Remove product"
+                    onClick={() => setProducts((prev) => prev.filter((item) => item.id !== product.id))}
+                    disabled={products.length === 1}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <label>
             Remarks
             <textarea
@@ -672,68 +960,162 @@ export default function Home() {
               <p>Valid Until: {invoice.validityDate || "-"}</p>
               <p>Currency: {invoice.currency}</p>
               <p>Shipping: {invoice.shippingMethod}</p>
-              <p>{freightSummaryLabel}: {freightSummaryValue}</p>
+              <p>
+                {quoteMode === "group"
+                  ? "Freight: Shown by option"
+                  : `${freightSummaryLabel}: ${freightSummaryValue}`}
+              </p>
             </div>
           </section>
 
-          <table className="invoice-table">
-            <thead>
-              <tr>
-                <th>Image</th>
-                <th>Description</th>
-                <th>SKU</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Tax</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => {
-                const subtotal = product.quantity * product.unitPrice;
-                const tax = subtotal * (product.taxRate / 100);
+          {quoteMode === "group" ? (
+            <section className="invoice-groups">
+              {productGroups.map((group, groupIndex) => {
+                const groupTotals = getGroupTotals(
+                  group.products,
+                  group.freightCharge,
+                  group.freightIncludedInPrice,
+                  invoice.shippingMethod
+                );
+                const groupFreightShownAsIncluded =
+                  invoice.shippingMethod === "DDP" && group.freightIncludedInPrice;
+                const groupFreightValue = groupFreightShownAsIncluded
+                  ? "/"
+                  : money(group.freightCharge, invoice.currency);
+
                 return (
-                  <tr key={product.id}>
-                    <td className="product-image-cell">
-                      {product.image ? <img className="product-thumb" src={product.image} alt="" /> : "-"}
-                    </td>
-                    <td>{product.description || "-"}</td>
-                    <td>{product.sku || "-"}</td>
-                    <td>{product.quantity}</td>
-                    <td>{money(product.unitPrice, invoice.currency)}</td>
-                    <td>{money(tax, invoice.currency)}</td>
-                    <td>{money(subtotal + tax, invoice.currency)}</td>
-                  </tr>
+                  <section className="invoice-group" key={group.id}>
+                    <h3>{group.title || `Option ${groupIndex + 1}`}</h3>
+                    <table className="invoice-table">
+                      <thead>
+                        <tr>
+                          <th>Image</th>
+                          <th>Description</th>
+                          <th>SKU</th>
+                          <th>Qty</th>
+                          <th>Unit</th>
+                          <th>Tax</th>
+                          <th>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.products.map((product) => {
+                          const { tax, amount } = getProductLineAmounts(product);
+                          return (
+                            <tr key={product.id}>
+                              <td className="product-image-cell">
+                                {product.image ? <img className="product-thumb" src={product.image} alt="" /> : "-"}
+                              </td>
+                              <td>{product.description || "-"}</td>
+                              <td>{product.sku || "-"}</td>
+                              <td>{product.quantity}</td>
+                              <td>{money(product.unitPrice, invoice.currency)}</td>
+                              <td>{money(tax, invoice.currency)}</td>
+                              <td>{money(amount, invoice.currency)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className="totals-card group-totals-card">
+                      <div>
+                        <span>Product Amount</span>
+                        <strong>{money(groupTotals.subtotal, invoice.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>Tax</span>
+                        <strong>{money(groupTotals.tax, invoice.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>{freightSummaryLabel}</span>
+                        <strong>{groupFreightValue}</strong>
+                      </div>
+                      <div className="grand-total">
+                        <span>Total Amount</span>
+                        <strong>{money(groupTotals.total, invoice.currency)}</strong>
+                      </div>
+                    </div>
+                  </section>
                 );
               })}
-            </tbody>
-          </table>
+            </section>
+          ) : (
+            <>
+              <table className="invoice-table">
+                <thead>
+                  <tr>
+                    <th>Image</th>
+                    <th>Description</th>
+                    <th>SKU</th>
+                    <th>Qty</th>
+                    <th>Unit</th>
+                    <th>Tax</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => {
+                    const { tax, amount } = getProductLineAmounts(product);
+                    return (
+                      <tr key={product.id}>
+                        <td className="product-image-cell">
+                          {product.image ? <img className="product-thumb" src={product.image} alt="" /> : "-"}
+                        </td>
+                        <td>{product.description || "-"}</td>
+                        <td>{product.sku || "-"}</td>
+                        <td>{product.quantity}</td>
+                        <td>{money(product.unitPrice, invoice.currency)}</td>
+                        <td>{money(tax, invoice.currency)}</td>
+                        <td>{money(amount, invoice.currency)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
 
-          <section className="invoice-bottom">
-            <div className="terms-block">
-              <h3>Payment Terms</h3>
-              <p>{invoice.paymentTerms}</p>
-              <h3>Bank Information</h3>
-              <p>{company.bankInfo || "-"}</p>
-              <h3>Remarks</h3>
-              <p>{invoice.remarks}</p>
-            </div>
-            <div className="totals-card">
-              <div>
-                <span>Product Amount</span>
-                <strong>{money(totals.productAmount, invoice.currency)}</strong>
+              <section className="invoice-bottom">
+                <div className="terms-block">
+                  <h3>Payment Terms</h3>
+                  <p>{invoice.paymentTerms}</p>
+                  <h3>Bank Information</h3>
+                  <p>{company.bankInfo || "-"}</p>
+                  <h3>Remarks</h3>
+                  <p>{invoice.remarks}</p>
+                </div>
+                <div className="totals-card">
+                  <div>
+                    <span>Product Amount</span>
+                    <strong>{money(totals.productAmount, invoice.currency)}</strong>
+                  </div>
+                  <div>
+                    <span>{freightSummaryLabel}</span>
+                    <strong>{freightSummaryValue}</strong>
+                  </div>
+                  <div className="grand-total">
+                    <span>Total Amount</span>
+                    <strong>{money(totals.total, invoice.currency)}</strong>
+                  </div>
+                  {company.seal && <img className="seal" src={company.seal} alt="Company seal" />}
+                </div>
+              </section>
+            </>
+          )}
+
+          {quoteMode === "group" && (
+            <section className="invoice-bottom group-terms-bottom">
+              <div className="terms-block">
+                <h3>Payment Terms</h3>
+                <p>{invoice.paymentTerms}</p>
+                <h3>Bank Information</h3>
+                <p>{company.bankInfo || "-"}</p>
+                <h3>Remarks</h3>
+                <p>{invoice.remarks}</p>
               </div>
-              <div>
-                <span>{freightSummaryLabel}</span>
-                <strong>{freightSummaryValue}</strong>
+              <div className="totals-card seal-card">
+                {company.seal && <img className="seal" src={company.seal} alt="Company seal" />}
               </div>
-              <div className="grand-total">
-                <span>Total Amount</span>
-                <strong>{money(totals.total, invoice.currency)}</strong>
-              </div>
-              {company.seal && <img className="seal" src={company.seal} alt="Company seal" />}
-            </div>
-          </section>
+            </section>
+          )}
 
           <footer className="invoice-footer">
             <p>{company.legalName} | {company.email || company.website || "GLcamp"}</p>
