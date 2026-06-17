@@ -536,7 +536,7 @@ export default function Home() {
                 onChange={(event) => setQuoteMode(event.target.value as QuoteMode)}
               >
                 <option value="normal">Normal Quote</option>
-                <option value="group">Option / Group Quote</option>
+                <option value="group">Group Quote</option>
               </select>
             </label>
             <div className="two-col">
@@ -668,7 +668,7 @@ export default function Home() {
             {quoteMode === "group" ? (
               <button className="secondary-button" onClick={addProductGroup}>
                 <Plus size={17} />
-                Add Group / Add Option
+                Add Group
               </button>
             ) : (
               <button className="secondary-button" onClick={() => setProducts((prev) => [...prev, blankProduct()])}>
