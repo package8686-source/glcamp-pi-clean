@@ -74,6 +74,21 @@ type InvoiceState = {
   remarks: string;
 };
 
+const paymentPriceOptions = [
+  {
+    label: "AliExpress Payment",
+    multiplier: 1
+  },
+  {
+    label: "PayPal Commercial Invoice - 5% Discount",
+    multiplier: 0.95
+  },
+  {
+    label: "Business Bank Transfer - 8% Discount",
+    multiplier: 0.92
+  }
+] as const;
+
 const currencySymbols: Record<Currency, string> = {
   USD: "$",
   EUR: "€",
@@ -163,6 +178,13 @@ function getGroupTotals(
     },
     { subtotal: 0, tax: 0, productAmount: 0, total: billableFreight }
   );
+}
+
+function getPaymentPrices(totalAmount: number) {
+  return paymentPriceOptions.map((option) => ({
+    ...option,
+    amount: totalAmount * option.multiplier
+  }));
 }
 
 export default function Home() {
@@ -536,9 +558,25 @@ export default function Home() {
                 onChange={(event) => setQuoteMode(event.target.value as QuoteMode)}
               >
                 <option value="normal">Normal Quote</option>
-                <option value="group">Group Quote</option>
+                <option value="group">Option / Group Quote</option>
               </select>
             </label>
+            <div className="quote-mode-switch" aria-label="Quote mode switch">
+              <button
+                type="button"
+                className={quoteMode === "normal" ? "quote-mode-button active" : "quote-mode-button"}
+                onClick={() => setQuoteMode("normal")}
+              >
+                Normal Quote
+              </button>
+              <button
+                type="button"
+                className={quoteMode === "group" ? "quote-mode-button active" : "quote-mode-button"}
+                onClick={() => setQuoteMode("group")}
+              >
+                Option / Group Quote
+              </button>
+            </div>
             <div className="two-col">
               <label>
                 Issue date
@@ -664,11 +702,16 @@ export default function Home() {
 
         <section className="form-section products-section">
           <div className="section-title product-title-row">
-            <h2>{quoteMode === "group" ? "Quote Options / Groups" : "Product Lines"}</h2>
+            <div>
+              <h2>{quoteMode === "group" ? "Quote Options / Groups" : "Product Lines"}</h2>
+              {quoteMode === "group" && (
+                <p className="section-note">Create separate quotation options such as Option A, Option B, Batch 1, or Batch 2.</p>
+              )}
+            </div>
             {quoteMode === "group" ? (
               <button className="secondary-button" onClick={addProductGroup}>
                 <Plus size={17} />
-                Add Group
+                Add Group / Add Option
               </button>
             ) : (
               <button className="secondary-button" onClick={() => setProducts((prev) => [...prev, blankProduct()])}>
@@ -1034,6 +1077,14 @@ export default function Home() {
                         <span>Total Amount</span>
                         <strong>{money(groupTotals.total, invoice.currency)}</strong>
                       </div>
+                      <div className="payment-totals">
+                        {getPaymentPrices(groupTotals.total).map((option) => (
+                          <div key={option.label}>
+                            <span>{option.label}</span>
+                            <strong>{money(option.amount, invoice.currency)}</strong>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </section>
                 );
@@ -1094,6 +1145,14 @@ export default function Home() {
                   <div className="grand-total">
                     <span>Total Amount</span>
                     <strong>{money(totals.total, invoice.currency)}</strong>
+                  </div>
+                  <div className="payment-totals">
+                    {getPaymentPrices(totals.total).map((option) => (
+                      <div key={option.label}>
+                        <span>{option.label}</span>
+                        <strong>{money(option.amount, invoice.currency)}</strong>
+                      </div>
+                    ))}
                   </div>
                   {company.seal && <img className="seal" src={company.seal} alt="Company seal" />}
                 </div>

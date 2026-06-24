@@ -114,6 +114,14 @@ button {
   font-size: 16px;
 }
 
+.section-note {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -139,6 +147,34 @@ label {
   margin: 0;
   accent-color: var(--green);
   box-shadow: none;
+}
+
+.quote-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px;
+  background: #eef3f1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.quote-mode-button {
+  min-height: 38px;
+  padding: 0 10px;
+  color: var(--green);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quote-mode-button.active {
+  color: #fff;
+  background: var(--green);
+  border-color: var(--green);
+  box-shadow: 0 5px 12px rgba(11, 107, 87, 0.18);
 }
 
 input,
@@ -517,6 +553,33 @@ select:focus {
   gap: 10px;
   padding: 9px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.totals-card > .payment-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-top: 8px;
+  border-bottom: 0;
+}
+
+.payment-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.payment-totals span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.payment-totals strong {
+  color: var(--green);
+  white-space: nowrap;
 }
 
 .grand-total {
