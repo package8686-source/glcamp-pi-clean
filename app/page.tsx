@@ -13,6 +13,7 @@ import {
 
 type Currency = "USD" | "EUR" | "GBP" | "AUD" | "CAD" | "AED" | "HUF" | "DKK";
 type QuoteMode = "default" | "tiered" | "group";
+type PriceMode = "standard" | "platform";
 type ShippingType =
   | "DDP"
   | "CIF"
@@ -254,6 +255,7 @@ export default function Home() {
   const [savedTemplates, setSavedTemplates] = useState<CompanyInfo[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [quoteMode, setQuoteMode] = useState<QuoteMode>("default");
+  const [priceMode, setPriceMode] = useState<PriceMode>("standard");
   const [company, setCompany] = useState<CompanyInfo>(defaultCompany);
   const [customer, setCustomer] = useState<CustomerInfo>({
     name: "",
@@ -743,6 +745,32 @@ export default function Home() {
                 onClick={() => setQuoteMode("group")}
               >
                 Group Quote
+              </button>
+            </div>
+            <label>
+              Price Type
+              <select
+                value={priceMode}
+                onChange={(event) => setPriceMode(event.target.value as PriceMode)}
+              >
+                <option value="standard">Standard Price</option>
+                <option value="platform">Platform Discount Price</option>
+              </select>
+            </label>
+            <div className="price-mode-switch" aria-label="Price type switch">
+              <button
+                type="button"
+                className={priceMode === "standard" ? "quote-mode-button active" : "quote-mode-button"}
+                onClick={() => setPriceMode("standard")}
+              >
+                Standard Price
+              </button>
+              <button
+                type="button"
+                className={priceMode === "platform" ? "quote-mode-button active" : "quote-mode-button"}
+                onClick={() => setPriceMode("platform")}
+              >
+                Platform Discount Price
               </button>
             </div>
             <div className="two-col">
@@ -1368,14 +1396,16 @@ export default function Home() {
                         <span>Total Amount</span>
                         <strong>{money(groupTotals.total, invoice.currency)}</strong>
                       </div>
-                      <div className="payment-totals">
-                        {getPaymentPrices(groupTotals.total).map((option) => (
-                          <div key={option.label}>
-                            <span>{option.label}</span>
-                            <strong>{money(option.amount, invoice.currency)}</strong>
-                          </div>
-                        ))}
-                      </div>
+                      {priceMode === "platform" && (
+                        <div className="payment-totals">
+                          {getPaymentPrices(groupTotals.total).map((option) => (
+                            <div key={option.label}>
+                              <span>{option.label}</span>
+                              <strong>{money(option.amount, invoice.currency)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </section>
                 );
@@ -1443,14 +1473,16 @@ export default function Home() {
                     <span>Total Amount</span>
                     <strong>{money(totals.total, invoice.currency)}</strong>
                   </div>
-                  <div className="payment-totals">
-                    {getPaymentPrices(totals.total).map((option) => (
-                      <div key={option.label}>
-                        <span>{option.label}</span>
-                        <strong>{money(option.amount, invoice.currency)}</strong>
-                      </div>
-                    ))}
-                  </div>
+                  {priceMode === "platform" && (
+                    <div className="payment-totals">
+                      {getPaymentPrices(totals.total).map((option) => (
+                        <div key={option.label}>
+                          <span>{option.label}</span>
+                          <strong>{money(option.amount, invoice.currency)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {company.seal && <img className="seal" src={company.seal} alt="Company seal" />}
                 </div>
               </section>
@@ -1511,14 +1543,16 @@ export default function Home() {
                     <span>Total Amount</span>
                     <strong>{money(totals.total, invoice.currency)}</strong>
                   </div>
-                  <div className="payment-totals">
-                    {getPaymentPrices(totals.total).map((option) => (
-                      <div key={option.label}>
-                        <span>{option.label}</span>
-                        <strong>{money(option.amount, invoice.currency)}</strong>
-                      </div>
-                    ))}
-                  </div>
+                  {priceMode === "platform" && (
+                    <div className="payment-totals">
+                      {getPaymentPrices(totals.total).map((option) => (
+                        <div key={option.label}>
+                          <span>{option.label}</span>
+                          <strong>{money(option.amount, invoice.currency)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {company.seal && <img className="seal" src={company.seal} alt="Company seal" />}
                 </div>
               </section>
