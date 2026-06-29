@@ -151,7 +151,7 @@ label {
 
 .quote-mode-switch {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 4px;
   background: #eef3f1;
@@ -277,7 +277,14 @@ select:focus {
   gap: 14px;
 }
 
-.quote-group-editor {
+.tiered-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quote-group-editor,
+.tiered-product-editor {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -285,6 +292,40 @@ select:focus {
   background: #f8fbfa;
   border: 1px solid #cfe2da;
   border-radius: 8px;
+}
+
+.tiered-product-head {
+  display: grid;
+  grid-template-columns: 30px 64px minmax(180px, 1fr) minmax(110px, 0.55fr) 42px;
+  gap: 9px;
+  align-items: end;
+}
+
+.tier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 103px;
+}
+
+.tier-editor {
+  display: grid;
+  grid-template-columns: 70px 90px 110px 80px 120px 42px;
+  gap: 9px;
+  align-items: end;
+  padding: 9px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.tier-label {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .group-editor-head {
@@ -635,8 +676,15 @@ select:focus {
   .two-col,
   .invoice-meta,
   .invoice-bottom,
-  .group-editor-head {
+  .group-editor-head,
+  .quote-mode-switch,
+  .tiered-product-head,
+  .tier-editor {
     grid-template-columns: 1fr;
+  }
+
+  .tier-list {
+    padding-left: 0;
   }
 
   .product-editor {

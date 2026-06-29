@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 type Currency = "USD" | "EUR" | "GBP" | "AUD" | "CAD" | "AED" | "HUF" | "DKK";
-type QuoteMode = "normal" | "group";
+type QuoteMode = "default" | "tiered" | "group";
 type ShippingType =
   | "DDP"
   | "CIF"
@@ -60,6 +60,21 @@ type ProductGroup = {
   products: ProductLine[];
   freightCharge: number;
   freightIncludedInPrice: boolean;
+};
+
+type TierPrice = {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+};
+
+type TieredProduct = {
+  id: string;
+  image: string;
+  description: string;
+  sku: string;
+  tiers: TierPrice[];
 };
 
 type InvoiceState = {
@@ -132,6 +147,21 @@ const blankProduct = (): ProductLine => ({
   taxRate: 0
 });
 
+const blankTier = (): TierPrice => ({
+  id: crypto.randomUUID(),
+  quantity: 1,
+  unitPrice: 0,
+  taxRate: 0
+});
+
+const blankTieredProduct = (): TieredProduct => ({
+  id: crypto.randomUUID(),
+  image: "",
+  description: "",
+  sku: "",
+  tiers: [blankTier()]
+});
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -153,6 +183,14 @@ function money(value: number, currency: Currency) {
 function getProductLineAmounts(product: ProductLine) {
   const subtotal = product.quantity * product.unitPrice;
   const tax = subtotal * (product.taxRate / 100);
+  const amount = subtotal + tax;
+
+  return { subtotal, tax, amount };
+}
+
+function getTierAmounts(tier: TierPrice) {
+  const subtotal = tier.quantity * tier.unitPrice;
+  const tax = subtotal * (tier.taxRate / 100);
   const amount = subtotal + tax;
 
   return { subtotal, tax, amount };
@@ -180,6 +218,30 @@ function getGroupTotals(
   );
 }
 
+function getTieredTotals(
+  tieredProducts: TieredProduct[],
+  freightCharge: number,
+  freightIncludedInPrice: boolean,
+  shippingMethod: ShippingType
+) {
+  const freightShownAsIncluded = shippingMethod === "DDP" && freightIncludedInPrice;
+  const billableFreight = freightShownAsIncluded ? 0 : freightCharge;
+
+  return tieredProducts.reduce(
+    (acc, product) => {
+      product.tiers.forEach((tier) => {
+        const { subtotal, tax, amount } = getTierAmounts(tier);
+        acc.subtotal += subtotal;
+        acc.tax += tax;
+        acc.productAmount += amount;
+        acc.total += amount;
+      });
+      return acc;
+    },
+    { subtotal: 0, tax: 0, productAmount: 0, total: billableFreight }
+  );
+}
+
 function getPaymentPrices(totalAmount: number) {
   return paymentPriceOptions.map((option) => ({
     ...option,
@@ -191,7 +253,7 @@ export default function Home() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [savedTemplates, setSavedTemplates] = useState<CompanyInfo[]>([]);
   const [isExporting, setIsExporting] = useState(false);
-  const [quoteMode, setQuoteMode] = useState<QuoteMode>("normal");
+  const [quoteMode, setQuoteMode] = useState<QuoteMode>("default");
   const [company, setCompany] = useState<CompanyInfo>(defaultCompany);
   const [customer, setCustomer] = useState<CustomerInfo>({
     name: "",
@@ -208,6 +270,33 @@ export default function Home() {
       quantity: 10,
       unitPrice: 68,
       taxRate: 0
+    }
+  ]);
+  const [tieredProducts, setTieredProducts] = useState<TieredProduct[]>([
+    {
+      ...blankTieredProduct(),
+      description: "Outdoor camping tent",
+      sku: "GLC-TENT-001",
+      tiers: [
+        {
+          ...blankTier(),
+          quantity: 10,
+          unitPrice: 68,
+          taxRate: 0
+        },
+        {
+          ...blankTier(),
+          quantity: 30,
+          unitPrice: 64,
+          taxRate: 0
+        },
+        {
+          ...blankTier(),
+          quantity: 50,
+          unitPrice: 60,
+          taxRate: 0
+        }
+      ]
     }
   ]);
   const [productGroups, setProductGroups] = useState<ProductGroup[]>([
@@ -256,13 +345,29 @@ export default function Home() {
   }, []);
 
   const totals = useMemo(() => {
+    if (quoteMode === "tiered") {
+      return getTieredTotals(
+        tieredProducts,
+        invoice.freightCharge,
+        invoice.freightIncludedInPrice,
+        invoice.shippingMethod
+      );
+    }
+
     return getGroupTotals(
       products,
       invoice.freightCharge,
       invoice.freightIncludedInPrice,
       invoice.shippingMethod
     );
-  }, [products, invoice.freightCharge, invoice.freightIncludedInPrice, invoice.shippingMethod]);
+  }, [
+    products,
+    tieredProducts,
+    quoteMode,
+    invoice.freightCharge,
+    invoice.freightIncludedInPrice,
+    invoice.shippingMethod
+  ]);
 
   const freightSummaryLabel = `${invoice.shippingMethod} Shipping Freight`;
   const freightShownAsIncluded = invoice.shippingMethod === "DDP" && invoice.freightIncludedInPrice;
@@ -285,6 +390,61 @@ export default function Home() {
   const updateProduct = (id: string, patch: Partial<ProductLine>) => {
     setProducts((prev) =>
       prev.map((product) => (product.id === id ? { ...product, ...patch } : product))
+    );
+  };
+
+  const updateTieredProduct = (productId: string, patch: Partial<TieredProduct>) => {
+    setTieredProducts((prev) =>
+      prev.map((product) => (product.id === productId ? { ...product, ...patch } : product))
+    );
+  };
+
+  const addTieredProduct = () => {
+    setTieredProducts((prev) => [...prev, blankTieredProduct()]);
+  };
+
+  const removeTieredProduct = (productId: string) => {
+    setTieredProducts((prev) =>
+      prev.length === 1 ? prev : prev.filter((product) => product.id !== productId)
+    );
+  };
+
+  const updateTier = (productId: string, tierId: string, patch: Partial<TierPrice>) => {
+    setTieredProducts((prev) =>
+      prev.map((product) =>
+        product.id === productId
+          ? {
+              ...product,
+              tiers: product.tiers.map((tier) =>
+                tier.id === tierId ? { ...tier, ...patch } : tier
+              )
+            }
+          : product
+      )
+    );
+  };
+
+  const addTier = (productId: string) => {
+    setTieredProducts((prev) =>
+      prev.map((product) =>
+        product.id === productId ? { ...product, tiers: [...product.tiers, blankTier()] } : product
+      )
+    );
+  };
+
+  const removeTier = (productId: string, tierId: string) => {
+    setTieredProducts((prev) =>
+      prev.map((product) =>
+        product.id === productId
+          ? {
+              ...product,
+              tiers:
+                product.tiers.length === 1
+                  ? product.tiers
+                  : product.tiers.filter((tier) => tier.id !== tierId)
+            }
+          : product
+      )
     );
   };
 
@@ -552,29 +712,37 @@ export default function Home() {
               </label>
             </div>
             <label>
-              Quote Mode
+              Quote Type
               <select
                 value={quoteMode}
                 onChange={(event) => setQuoteMode(event.target.value as QuoteMode)}
               >
-                <option value="normal">Normal Quote</option>
-                <option value="group">Option / Group Quote</option>
+                <option value="default">Default Quote</option>
+                <option value="tiered">Tiered Quote</option>
+                <option value="group">Group Quote</option>
               </select>
             </label>
-            <div className="quote-mode-switch" aria-label="Quote mode switch">
+            <div className="quote-mode-switch" aria-label="Quote type switch">
               <button
                 type="button"
-                className={quoteMode === "normal" ? "quote-mode-button active" : "quote-mode-button"}
-                onClick={() => setQuoteMode("normal")}
+                className={quoteMode === "default" ? "quote-mode-button active" : "quote-mode-button"}
+                onClick={() => setQuoteMode("default")}
               >
-                Normal Quote
+                Default Quote
+              </button>
+              <button
+                type="button"
+                className={quoteMode === "tiered" ? "quote-mode-button active" : "quote-mode-button"}
+                onClick={() => setQuoteMode("tiered")}
+              >
+                Tiered Quote
               </button>
               <button
                 type="button"
                 className={quoteMode === "group" ? "quote-mode-button active" : "quote-mode-button"}
                 onClick={() => setQuoteMode("group")}
               >
-                Option / Group Quote
+                Group Quote
               </button>
             </div>
             <div className="two-col">
@@ -614,7 +782,7 @@ export default function Home() {
                   ))}
                 </select>
               </label>
-              {quoteMode === "normal" && (
+              {quoteMode !== "group" && (
                 <label>
                   Shipping Freight
                   <input
@@ -629,7 +797,7 @@ export default function Home() {
                 </label>
               )}
             </div>
-            {quoteMode === "normal" && (
+            {quoteMode !== "group" && (
               <label className="checkbox-row">
                 <input
                   type="checkbox"
@@ -703,7 +871,16 @@ export default function Home() {
         <section className="form-section products-section">
           <div className="section-title product-title-row">
             <div>
-              <h2>{quoteMode === "group" ? "Quote Options / Groups" : "Product Lines"}</h2>
+              <h2>
+                {quoteMode === "group"
+                  ? "Quote Options / Groups"
+                  : quoteMode === "tiered"
+                    ? "Tiered Quote Products"
+                    : "Product Lines"}
+              </h2>
+              {quoteMode === "tiered" && (
+                <p className="section-note">Create quantity-based price tiers for each product.</p>
+              )}
               {quoteMode === "group" && (
                 <p className="section-note">Create separate quotation options such as Option A, Option B, Batch 1, or Batch 2.</p>
               )}
@@ -712,6 +889,11 @@ export default function Home() {
               <button className="secondary-button" onClick={addProductGroup}>
                 <Plus size={17} />
                 Add Group / Add Option
+              </button>
+            ) : quoteMode === "tiered" ? (
+              <button className="secondary-button" onClick={addTieredProduct}>
+                <Plus size={17} />
+                Add Tiered Product
               </button>
             ) : (
               <button className="secondary-button" onClick={() => setProducts((prev) => [...prev, blankProduct()])}>
@@ -861,6 +1043,115 @@ export default function Home() {
                   <button className="secondary-button group-add-product" onClick={() => addGroupProduct(group.id)}>
                     <Plus size={17} />
                     Add Product
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : quoteMode === "tiered" ? (
+            <div className="tiered-product-list">
+              {tieredProducts.map((product, productIndex) => (
+                <div className="tiered-product-editor" key={product.id}>
+                  <div className="tiered-product-head">
+                    <div className="product-index">{productIndex + 1}</div>
+                    <label className="image-upload-tile">
+                      {product.image ? <img src={product.image} alt="" /> : <ImagePlus size={20} />}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) =>
+                          handleImageUpload(event, (value) =>
+                            updateTieredProduct(product.id, { image: value })
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="wide-field">
+                      Description
+                      <input
+                        value={product.description}
+                        onChange={(event) =>
+                          updateTieredProduct(product.id, { description: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      SKU
+                      <input
+                        value={product.sku}
+                        onChange={(event) =>
+                          updateTieredProduct(product.id, { sku: event.target.value })
+                        }
+                      />
+                    </label>
+                    <button
+                      className="icon-button"
+                      aria-label="Remove tiered product"
+                      onClick={() => removeTieredProduct(product.id)}
+                      disabled={tieredProducts.length === 1}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                  <div className="tier-list">
+                    {product.tiers.map((tier, tierIndex) => (
+                      <div className="tier-editor" key={tier.id}>
+                        <div className="tier-label">Tier {tierIndex + 1}</div>
+                        <label>
+                          Qty
+                          <input
+                            type="number"
+                            min="0"
+                            value={tier.quantity}
+                            onChange={(event) =>
+                              updateTier(product.id, tier.id, { quantity: Number(event.target.value) })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Unit price
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={tier.unitPrice}
+                            onChange={(event) =>
+                              updateTier(product.id, tier.id, { unitPrice: Number(event.target.value) })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Tax %
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={tier.taxRate}
+                            onChange={(event) =>
+                              updateTier(product.id, tier.id, { taxRate: Number(event.target.value) })
+                            }
+                          />
+                        </label>
+                        <label className="line-amount-field">
+                          Amount
+                          <input
+                            readOnly
+                            value={money(getTierAmounts(tier).amount, invoice.currency)}
+                          />
+                        </label>
+                        <button
+                          className="icon-button"
+                          aria-label="Remove tier"
+                          onClick={() => removeTier(product.id, tier.id)}
+                          disabled={product.tiers.length === 1}
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="secondary-button group-add-product" onClick={() => addTier(product.id)}>
+                    <Plus size={17} />
+                    Add Price Tier
                   </button>
                 </div>
               ))}
@@ -1090,6 +1381,80 @@ export default function Home() {
                 );
               })}
             </section>
+          ) : quoteMode === "tiered" ? (
+            <>
+              <table className="invoice-table">
+                <thead>
+                  <tr>
+                    <th>Image</th>
+                    <th>Description</th>
+                    <th>SKU</th>
+                    <th>Tier Qty</th>
+                    <th>Unit</th>
+                    <th>Tax</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tieredProducts.flatMap((product) =>
+                    product.tiers.map((tier, tierIndex) => {
+                      const { tax, amount } = getTierAmounts(tier);
+                      return (
+                        <tr key={`${product.id}-${tier.id}`}>
+                          <td className="product-image-cell">
+                            {tierIndex === 0
+                              ? product.image
+                                ? <img className="product-thumb" src={product.image} alt="" />
+                                : "-"
+                              : ""}
+                          </td>
+                          <td>{tierIndex === 0 ? product.description || "-" : ""}</td>
+                          <td>{tierIndex === 0 ? product.sku || "-" : ""}</td>
+                          <td>{tier.quantity}</td>
+                          <td>{money(tier.unitPrice, invoice.currency)}</td>
+                          <td>{money(tax, invoice.currency)}</td>
+                          <td>{money(amount, invoice.currency)}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+
+              <section className="invoice-bottom">
+                <div className="terms-block">
+                  <h3>Payment Terms</h3>
+                  <p>{invoice.paymentTerms}</p>
+                  <h3>Bank Information</h3>
+                  <p>{company.bankInfo || "-"}</p>
+                  <h3>Remarks</h3>
+                  <p>{invoice.remarks}</p>
+                </div>
+                <div className="totals-card">
+                  <div>
+                    <span>Product Amount</span>
+                    <strong>{money(totals.productAmount, invoice.currency)}</strong>
+                  </div>
+                  <div>
+                    <span>{freightSummaryLabel}</span>
+                    <strong>{freightSummaryValue}</strong>
+                  </div>
+                  <div className="grand-total">
+                    <span>Total Amount</span>
+                    <strong>{money(totals.total, invoice.currency)}</strong>
+                  </div>
+                  <div className="payment-totals">
+                    {getPaymentPrices(totals.total).map((option) => (
+                      <div key={option.label}>
+                        <span>{option.label}</span>
+                        <strong>{money(option.amount, invoice.currency)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  {company.seal && <img className="seal" src={company.seal} alt="Company seal" />}
+                </div>
+              </section>
+            </>
           ) : (
             <>
               <table className="invoice-table">
