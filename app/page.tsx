@@ -11,7 +11,31 @@ import {
   Trash2
 } from "lucide-react";
 
-type Currency = "USD" | "EUR" | "GBP" | "AUD" | "CAD" | "AED" | "HUF" | "DKK";
+type Currency =
+  | "USD"
+  | "EUR"
+  | "GBP"
+  | "AUD"
+  | "CAD"
+  | "AED"
+  | "HUF"
+  | "DKK"
+  | "RUB"
+  | "CNY"
+  | "JPY"
+  | "KRW"
+  | "SGD"
+  | "NZD"
+  | "CHF"
+  | "SEK"
+  | "NOK"
+  | "PLN"
+  | "CZK"
+  | "TRY"
+  | "SAR"
+  | "QAR"
+  | "KWD"
+  | "MXN";
 type QuoteMode = "default" | "tiered" | "group";
 type PriceMode = "standard" | "platform";
 type ShippingType =
@@ -141,7 +165,25 @@ const currencySymbols: Record<Currency, string> = {
   GBP: "£",
   AUD: "A$",
   CAD: "C$",
-  AED: "د.إ", HUF: "Ft", DKK: "kr"
+  AED: "د.إ",
+  HUF: "Ft",
+  DKK: "kr",
+  RUB: "₽",
+  CNY: "¥",
+  JPY: "¥",
+  KRW: "₩",
+  SGD: "S$",
+  NZD: "NZ$",
+  CHF: "CHF",
+  SEK: "kr",
+  NOK: "kr",
+  PLN: "zł",
+  CZK: "Kč",
+  TRY: "₺",
+  SAR: "﷼",
+  QAR: "ر.ق",
+  KWD: "د.ك",
+  MXN: "MX$"
 };
 
 const shippingTypes: ShippingType[] = [
