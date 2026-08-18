@@ -151,6 +151,10 @@ const paymentPriceOptions = [
     multiplier: 0.95
   },
   {
+    label: "Credit Card Payment - 5% Discount",
+    multiplier: 0.95
+  },
+  {
     label: "Business Bank Transfer - 8% Discount",
     multiplier: 0.92
   }
