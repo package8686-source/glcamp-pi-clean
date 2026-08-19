@@ -147,16 +147,16 @@ const paymentPriceOptions = [
     multiplier: 1
   },
   {
-    label: "PayPal Commercial Invoice - 5% Discount",
-    multiplier: 0.95
+    label: "PayPal Commercial Invoice - 8% Discount",
+    multiplier: 0.92
   },
   {
     label: "Credit Card Payment - 5% Discount",
     multiplier: 0.95
   },
   {
-    label: "Business Bank Transfer - 8% Discount",
-    multiplier: 0.92
+    label: "Business Bank Transfer - 13% Discount",
+    multiplier: 0.87
   }
 ] as const;
 
